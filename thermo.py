@@ -9,6 +9,20 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+import paho.mqtt.client as mqtt
+
+connectionObj = {
+    "clientName": "AYnaBabaProgrammer",
+    "host": "broker.hivemq.com",
+    "port": 1883,
+}
+publishTopic = "my/topic"
+subscribeTopicTemp = "my/topic/temp"
+subscribeTopicHum = "my/topic/hum"
+
+subscribeList = [subscribeTopicTemp, subscribeTopicHum]
+
+
 
 
 class Ui_Dialog(object):
@@ -140,7 +154,7 @@ class Ui_Dialog(object):
         self.statusLabel_4.setFrameShape(QtWidgets.QFrame.Box)
         self.statusLabel_4.setText("")
         self.statusLabel_4.setObjectName("statusLabel_4")
-        self.btn = QtWidgets.QPushButton(self.frame, clicked= lambda: self.checkState(f'{self.Cal()}') )
+        self.btn = QtWidgets.QPushButton(self.frame, clicked= lambda: self.handleClick() )
         self.btn.setGeometry(QtCore.QRect(190, 230, 100, 100))
         self.btn.setStyleSheet(
             'border-radius : 50 ; border :2px solid black; font: 18pt \'Trebuchet MS\'; color: rgb(38, 33, 228); background-color:rgb(248, 246, 232);')
@@ -169,7 +183,15 @@ class Ui_Dialog(object):
                 'border-radius : 50 ; border :2px solid black; font: 18pt \'Trebuchet MS\'; color: rgb(38, 33, 228); background-color:rgb(248, 0, 97);')
 
     start = 0
+    def handleClick(self):
+        if self.btn.isChecked():
+            client.publish(publishTopic, "ON")
+        else:
+            client.publish(publishTopic, "OFF")
+        self.checkState(f'{self.Cal()}')
 
+    def handleHumidity(self, payload):
+        self.lcd_1.display(payload)
     def Cal(self):
         self.start = self.start + 1
 
@@ -184,10 +206,9 @@ class Ui_Dialog(object):
 
         else:
             self.btn.setText("OFF")
-            self.lcd_1.display(f'{int(press) -30}')
+            # self.lcd_1.display(f'{int(press) -30}')
             self.lcd_2.display(press)
             #self.label.setText(f"{self.label.text()}{press}")
-
 
     def retranslateUi(self, Dialog):
         _translate = QtCore.QCoreApplication.translate
@@ -205,9 +226,22 @@ class Ui_Dialog(object):
 
 if __name__ == "__main__":
     import sys
+    # Connecting
+    client = mqtt.Client(connectionObj["clientName"])
+    client.connect(connectionObj["host"], connectionObj["port"])
+    for i in subscribeList:
+        client.subscribe(i)
+
     app = QtWidgets.QApplication(sys.argv)
     Dialog = QtWidgets.QDialog()
     ui = Ui_Dialog()
     ui.setupUi(Dialog)
     Dialog.show()
+    def on_message(client, userdata, message):
+        print("message received ", str(message.payload.decode("utf-8")))
+        print("message topic=", message.topic)
+        if (message.topic == subscribeTopicHum):
+            ui.handleHumidity(int(message.payload))
+    client.on_message = on_message
+    client.loop_start()
     sys.exit(app.exec_())
